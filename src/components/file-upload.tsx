@@ -15,6 +15,13 @@ interface FileUploadProps {
   setIsLoadingAnalysis: (loading: boolean) => void;
 }
 
+const ACCEPTED_MIME_TYPES = [
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+    'text/plain' // .txt
+];
+const ACCEPTED_EXTENSIONS = '.pdf,.docx,.txt';
+
 export function FileUpload({ onAnalysisComplete, setIsLoadingAnalysis }: FileUploadProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -24,13 +31,13 @@ export function FileUpload({ onAnalysisComplete, setIsLoadingAnalysis }: FileUpl
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'].includes(file.type)) {
+      if (ACCEPTED_MIME_TYPES.includes(file.type)) {
         setSelectedFile(file);
       } else {
         toast({
           variant: "destructive",
           title: "Invalid File Type",
-          description: "Please upload a PDF, DOCX, or TXT file.",
+          description: `Please upload a ${ACCEPTED_EXTENSIONS.replaceAll(',', ', ')} file.`,
         });
         setSelectedFile(null);
         if (fileInputRef.current) {
@@ -55,13 +62,13 @@ export function FileUpload({ onAnalysisComplete, setIsLoadingAnalysis }: FileUpl
     setIsDragging(false);
     const file = event.dataTransfer.files?.[0];
     if (file) {
-      if (['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'].includes(file.type)) {
+       if (ACCEPTED_MIME_TYPES.includes(file.type)) {
         setSelectedFile(file);
       } else {
         toast({
           variant: "destructive",
           title: "Invalid File Type",
-          description: "Please upload a PDF, DOCX, or TXT file.",
+           description: `Please upload a ${ACCEPTED_EXTENSIONS.replaceAll(',', ', ')} file.`,
         });
         setSelectedFile(null);
       }
@@ -90,19 +97,30 @@ export function FileUpload({ onAnalysisComplete, setIsLoadingAnalysis }: FileUpl
     setIsLoadingAnalysis(true);
     try {
       const documentDataUri = await readFileAsDataURL(selectedFile);
+
+      // Note: For complex formats like DOCX, client-side parsing to text before sending
+      // might be more reliable if the AI model struggles with the raw data URI.
+      // Libraries like mammoth.js could be used for this, but require adding dependencies.
+      // const textContent = await extractTextFromDocx(selectedFile); // Example hypothetical function
+      // const analysisResult = await analyzeDocumentContent({ documentText: textContent });
+
+      // Current approach: Send data URI directly to the AI flow
       const analysisResult = await analyzeDocumentContent({ documentDataUri });
+
       onAnalysisComplete(analysisResult);
       toast({
         title: "Analysis Complete",
         description: "Document analysis finished successfully.",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Analysis failed:", error);
       toast({
         variant: "destructive",
         title: "Analysis Failed",
-        description: "Could not analyze the document. Please try again.",
+        description: error?.message || "Could not analyze the document. Please try again.",
       });
+       // Clear potentially bad results
+       onAnalysisComplete({ topics: [], subtopics: [], dataPoints: [], quotes: [], summary: "Error during analysis." });
     } finally {
       setIsLoadingAnalysis(false);
     }
@@ -133,13 +151,13 @@ export function FileUpload({ onAnalysisComplete, setIsLoadingAnalysis }: FileUpl
             <p className="mt-2 text-sm text-muted-foreground">
               <span className="font-semibold text-accent">Click to upload</span> or drag and drop
             </p>
-            <p className="text-xs text-muted-foreground">PDF, DOCX, or TXT</p>
+            <p className="text-xs text-muted-foreground">{ACCEPTED_EXTENSIONS.replaceAll(',', ', ').toUpperCase()}</p>
             <Input
               id="file-upload"
               type="file"
               className="hidden"
               onChange={handleFileChange}
-              accept=".pdf,.docx,.txt"
+              accept={ACCEPTED_EXTENSIONS}
               ref={fileInputRef}
             />
           </div>
