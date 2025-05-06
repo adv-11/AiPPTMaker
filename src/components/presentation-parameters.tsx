@@ -10,9 +10,18 @@ import { Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 // Assuming a flow exists to generate the presentation based on analysis and parameters
 // import { generatePresentation } from '@/ai/flows/presentation-generator'; // Placeholder
+import type { AnalyzeDocumentContentOutput } from '@/ai/flows/document-analyzer'; // Import if needed for more specific typing
+
+// Simulate visual elements with placeholder images
+const placeholderVisuals = [
+  "https://picsum.photos/seed/graph/600/400",
+  "https://picsum.photos/seed/chart/600/400",
+  "https://picsum.photos/seed/diagram/600/400",
+  "https://picsum.photos/seed/infographic/600/400",
+];
 
 interface PresentationParametersProps {
-  analysisData: any; // Type this appropriately based on AnalyzeDocumentContentOutput
+  analysisData: AnalyzeDocumentContentOutput | null; // Use specific type
   onGenerationStart: () => void;
   onGenerationComplete: (presentationData: any) => void; // Type this based on expected presentation output
   isGenerating: boolean;
@@ -37,7 +46,8 @@ export function PresentationParameters({
     if (analysisData) {
       // Basic suggestion based on topic count or content length
       const suggestedSlides = Math.max(5, Math.min(20, (analysisData.topics?.length || 0) + (analysisData.subtopics?.length || 0) / 2));
-      // setNumSlides(`AI Suggestion: ${Math.round(suggestedSlides)}`); // Example, needs better UX
+      // Consider setting a default or placeholder if needed, e.g.,
+      // if (numSlides === '') setNumSlides(Math.round(suggestedSlides));
     }
   }, [analysisData]);
 
@@ -68,11 +78,14 @@ export function PresentationParameters({
       await new Promise(resolve => setTimeout(resolve, 3000));
 
       // Replace with actual call to AI flow like generatePresentation(...)
+      // Use valid placeholder URLs
       const generatedPresentation = {
         slides: [
-          { id: 1, title: "Slide 1 Title", content: "Generated content...", visuals: ["placeholder_chart.png"] },
-          { id: 2, title: "Slide 2 Title", content: "More generated content...", visuals: ["placeholder_smartart.svg"] },
-          // ... more slides
+          { id: 1, title: "Slide 1 Title", content: "Generated content for the first slide covering key topic A.", visuals: [placeholderVisuals[0]] },
+          { id: 2, title: "Slide 2 Title", content: "More generated content exploring subtopic B-1.", visuals: [placeholderVisuals[1]] },
+          { id: 3, title: "Data Insights", content: "Presenting important data points found in the document.", visuals: [placeholderVisuals[2]] },
+          { id: 4, title: "Key Quote", content: "Highlighting a significant quote: '...'", visuals: [placeholderVisuals[3]] },
+          { id: 5, title: "Conclusion Slide", content: "Summarizing the main points and concluding the presentation.", visuals: [] }, // Slide with no visual
         ],
         metadata: { template, toneStyle }
       };

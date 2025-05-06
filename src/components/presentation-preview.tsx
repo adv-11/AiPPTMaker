@@ -16,7 +16,7 @@ interface Slide {
   id: number;
   title: string;
   content: string;
-  visuals?: string[]; // Array of image URLs or data URIs (placeholders for now)
+  visuals?: string[]; // Array of image URLs or data URIs
 }
 
 interface PresentationPreviewProps {
@@ -26,6 +26,15 @@ interface PresentationPreviewProps {
   } | null;
 }
 
+// Simulate visual elements with placeholder images - Moved to PresentationParameters
+// const placeholderVisuals = [
+//   "https://picsum.photos/seed/graph/600/400",
+//   "https://picsum.photos/seed/chart/600/400",
+//   "https://picsum.photos/seed/diagram/600/400",
+//   "https://picsum.photos/seed/infographic/600/400",
+// ];
+
+
 export function PresentationPreview({ presentationData }: PresentationPreviewProps) {
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [slides, setSlides] = useState<Slide[]>([]);
@@ -34,22 +43,11 @@ export function PresentationPreview({ presentationData }: PresentationPreviewPro
   const [isRegenerating, setIsRegenerating] = useState<boolean>(false);
   const { toast } = useToast();
 
-   // Simulate visual elements with placeholder images
-  const placeholderVisuals = [
-    "https://picsum.photos/seed/graph/600/400",
-    "https://picsum.photos/seed/chart/600/400",
-    "https://picsum.photos/seed/diagram/600/400",
-    "https://picsum.photos/seed/infographic/600/400",
-  ];
 
   useEffect(() => {
      if (presentationData?.slides) {
-      // Add placeholder visuals to the initial slides
-      const slidesWithVisuals = presentationData.slides.map((slide, index) => ({
-        ...slide,
-        visuals: slide.visuals || [placeholderVisuals[index % placeholderVisuals.length]],
-      }));
-      setSlides(slidesWithVisuals);
+       // Slides received should already have valid visual URLs or be empty arrays
+      setSlides(presentationData.slides);
       setCurrentSlideIndex(0); // Reset to first slide when new data arrives
       setEditingSlideId(null); // Reset editing state
     } else {
@@ -63,6 +61,17 @@ export function PresentationPreview({ presentationData }: PresentationPreviewPro
   }
 
   const currentSlide = slides[currentSlideIndex];
+  if (!currentSlide) { // Add a check for currentSlide to prevent errors if slides array is manipulated unexpectedly
+    return (
+        <Card className="mt-6">
+            <CardHeader>
+                <CardTitle>Error</CardTitle>
+                <CardDescription>Could not load current slide.</CardDescription>
+            </CardHeader>
+        </Card>
+    );
+  }
+
 
   const goToNextSlide = () => {
     setCurrentSlideIndex((prevIndex) => Math.min(prevIndex + 1, slides.length - 1));
@@ -118,7 +127,10 @@ export function PresentationPreview({ presentationData }: PresentationPreviewPro
                   ...slide,
                   content: result.regeneratedSlide,
                   // Potentially regenerate visuals too if the flow supports it
-                   visuals: [placeholderVisuals[(currentSlideIndex + 1) % placeholderVisuals.length]], // Simulate new visual
+                  // For now, assume visual regeneration might provide a new URL or keep existing one.
+                  // If visuals are regenerated, they should come from 'result'.
+                  // For placeholder:
+                  visuals: slide.visuals && slide.visuals.length > 0 ? [slide.visuals[0]] : ["https://picsum.photos/seed/newvisual/600/400"], // Simulate new visual if needed
                  }
               : slide
           )
@@ -202,14 +214,14 @@ export function PresentationPreview({ presentationData }: PresentationPreviewPro
                 </div>
                  {/* Visual Area */}
                 <div className="w-full md:w-1/2 bg-secondary flex items-center justify-center p-4">
-                  {currentSlide.visuals && currentSlide.visuals.length > 0 ? (
+                  {currentSlide.visuals && currentSlide.visuals.length > 0 && currentSlide.visuals[0] ? (
                      <div className="relative w-full h-full">
                       <Image
-                        src={currentSlide.visuals[0]} // Display first visual for now
+                        src={currentSlide.visuals[0]} // Display first visual
                         alt={`Visual for ${currentSlide.title}`}
                         layout="fill"
                         objectFit="contain"
-                        data-ai-hint="chart graph" // Add hint for AI
+                        data-ai-hint="chart graph" 
                       />
                      </div>
                   ) : (
