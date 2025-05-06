@@ -8,22 +8,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-// Assuming a flow exists to generate the presentation based on analysis and parameters
-// import { generatePresentation } from '@/ai/flows/presentation-generator'; // Placeholder
-import type { AnalyzeDocumentContentOutput } from '@/ai/flows/document-analyzer'; // Import if needed for more specific typing
-
-// Simulate visual elements with placeholder images
-const placeholderVisuals = [
-  "https://picsum.photos/seed/graph/600/400",
-  "https://picsum.photos/seed/chart/600/400",
-  "https://picsum.photos/seed/diagram/600/400",
-  "https://picsum.photos/seed/infographic/600/400",
-];
+// Import types and function directly from the presentation generator flow file
+import { generatePresentation, GeneratePresentationInput, GeneratePresentationOutput } from '@/ai/flows/presentation-generator';
+// Import type directly from the document analyzer flow file
+import type { AnalyzeDocumentContentOutput } from '@/ai/flows/document-analyzer';
 
 interface PresentationParametersProps {
-  analysisData: AnalyzeDocumentContentOutput | null; // Use specific type
+  analysisData: AnalyzeDocumentContentOutput | null;
   onGenerationStart: () => void;
-  onGenerationComplete: (presentationData: any) => void; // Type this based on expected presentation output
+  onGenerationComplete: (presentationData: GeneratePresentationOutput | null) => void;
   isGenerating: boolean;
 }
 
@@ -33,23 +26,19 @@ export function PresentationParameters({
   onGenerationComplete,
   isGenerating,
 }: PresentationParametersProps) {
-  const [numSlides, setNumSlides] = useState<number | string>(''); // AI suggestion can be complex, start empty
+  const [numSlides, setNumSlides] = useState<number | string>('');
   const [template, setTemplate] = useState<string>('Modern');
-  const [smartArtDensity, setSmartArtDensity] = useState<string>('medium');
+  const [smartArtDensity, setSmartArtDensity] = useState<'low' | 'medium' | 'high'>('medium');
   const [dataVizPreference, setDataVizPreference] = useState<string>('charts');
   const [contentVisualRatio, setContentVisualRatio] = useState<string>('balanced');
   const [toneStyle, setToneStyle] = useState<string>('professional');
   const { toast } = useToast();
 
-  // Placeholder for AI suggestion logic
   React.useEffect(() => {
     if (analysisData) {
-      // Basic suggestion based on topic count or content length
-      const suggestedSlides = Math.max(5, Math.min(20, (analysisData.topics?.length || 0) + (analysisData.subtopics?.length || 0) / 2));
-      // Consider setting a default or placeholder if needed, e.g.,
-      // if (numSlides === '') setNumSlides(Math.round(suggestedSlides));
+       // No AI suggestion logic implemented yet
     }
-  }, [analysisData]);
+  }, [analysisData, numSlides]);
 
   const handleGenerate = async () => {
     if (!analysisData) {
@@ -60,48 +49,57 @@ export function PresentationParameters({
       });
       return;
     }
+     if (typeof numSlides === 'string' && numSlides !== '' && parseInt(numSlides, 10) <= 0) {
+       toast({
+         variant: "destructive",
+         title: "Invalid Slide Number",
+         description: "Number of slides must be positive.",
+       });
+       return;
+     }
 
     onGenerationStart();
     try {
-       // --- Placeholder for AI Presentation Generation ---
-      console.log("Starting presentation generation with parameters:", {
-        analysisData, // Pass the actual analysis results
-        numSlides: typeof numSlides === 'number' ? numSlides : undefined, // Handle AI suggestion string?
+      // Prepare input for the AI flow
+      const presentationInput: GeneratePresentationInput = {
+        analysisData: { // Ensure structure matches AnalyzeDocumentContentOutput
+            topics: analysisData.topics || [],
+            subtopics: analysisData.subtopics || [],
+            dataPoints: analysisData.dataPoints || [],
+            quotes: analysisData.quotes || [],
+            summary: analysisData.summary || '',
+        },
+        numSlides: typeof numSlides === 'number' ? numSlides : typeof numSlides === 'string' && numSlides !== '' ? parseInt(numSlides, 10) : undefined, // Handle empty string case
         template,
         smartArtDensity,
         dataVizPreference,
         contentVisualRatio,
         toneStyle,
-      });
-
-      // Simulate generation delay
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
-      // Replace with actual call to AI flow like generatePresentation(...)
-      // Use valid placeholder URLs
-      const generatedPresentation = {
-        slides: [
-          { id: 1, title: "Slide 1 Title", content: "Generated content for the first slide covering key topic A.", visuals: [placeholderVisuals[0]] },
-          { id: 2, title: "Slide 2 Title", content: "More generated content exploring subtopic B-1.", visuals: [placeholderVisuals[1]] },
-          { id: 3, title: "Data Insights", content: "Presenting important data points found in the document.", visuals: [placeholderVisuals[2]] },
-          { id: 4, title: "Key Quote", content: "Highlighting a significant quote: '...'", visuals: [placeholderVisuals[3]] },
-          { id: 5, title: "Conclusion Slide", content: "Summarizing the main points and concluding the presentation.", visuals: [] }, // Slide with no visual
-        ],
-        metadata: { template, toneStyle }
       };
-      // --- End Placeholder ---
+
+      console.log("Calling generatePresentation with input:", presentationInput);
+
+      // Call the actual AI flow
+      const generatedPresentation = await generatePresentation(presentationInput);
+
+      console.log("Received presentation data:", generatedPresentation);
+
+      // Basic check if the generation resulted in an error slide structure
+      if (generatedPresentation.slides.length === 1 && generatedPresentation.slides[0].id === 0 && generatedPresentation.slides[0].title.startsWith("Error")) {
+          throw new Error(generatedPresentation.slides[0].content);
+      }
 
       onGenerationComplete(generatedPresentation);
       toast({
         title: "Presentation Generated",
         description: "Your presentation draft is ready for preview.",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Presentation generation failed:", error);
       toast({
         variant: "destructive",
         title: "Generation Failed",
-        description: "Could not generate the presentation. Please try again.",
+        description: error?.message || "Could not generate the presentation. Please try again.",
       });
       onGenerationComplete(null); // Indicate failure
     }
@@ -138,16 +136,19 @@ export function PresentationParameters({
               id="num-slides"
               type="number"
               placeholder="Leave blank for AI suggestion"
-              value={typeof numSlides === 'number' ? numSlides : ''}
-              onChange={(e) => setNumSlides(e.target.value ? parseInt(e.target.value, 10) : '')}
+               value={numSlides}
+               onChange={(e) => {
+                  const val = e.target.value;
+                  setNumSlides(val === '' ? '' : parseInt(val, 10));
+               }}
               min="1"
             />
           </div>
 
 
           <div className="space-y-2">
-            <Label htmlFor="smart-art-density">Smart Art Density</Label>
-            <Select value={smartArtDensity} onValueChange={setSmartArtDensity}>
+            <Label htmlFor="smart-art-density">Smart Art/Visual Density</Label>
+             <Select value={smartArtDensity} onValueChange={(value) => setSmartArtDensity(value as 'low' | 'medium' | 'high')}>
               <SelectTrigger id="smart-art-density">
                 <SelectValue placeholder="Select density" />
               </SelectTrigger>
@@ -166,9 +167,11 @@ export function PresentationParameters({
                 <SelectValue placeholder="Select preference" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="charts">Charts</SelectItem>
-                <SelectItem value="graphs">Graphs</SelectItem>
+                <SelectItem value="charts">Charts (Bar, Pie, Line)</SelectItem>
+                <SelectItem value="graphs">Graphs (Network, Flow)</SelectItem>
                 <SelectItem value="infographics">Infographics</SelectItem>
+                 <SelectItem value="diagrams">Diagrams</SelectItem>
+                 <SelectItem value="web-images">Relevant Images (Web Search)</SelectItem> {/* Updated label */}
               </SelectContent>
             </Select>
           </div>
@@ -198,6 +201,7 @@ export function PresentationParameters({
                 <SelectItem value="casual">Casual</SelectItem>
                 <SelectItem value="bold">Bold</SelectItem>
                 <SelectItem value="informative">Informative</SelectItem>
+                <SelectItem value="engaging">Engaging</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from "@/hooks/use-toast";
+// Import the type and function directly from the flow file
 import type { AnalyzeDocumentContentOutput } from '@/ai/flows/document-analyzer';
 import { analyzeDocumentContent } from '@/ai/flows/document-analyzer';
 
@@ -98,12 +99,6 @@ export function FileUpload({ onAnalysisComplete, setIsLoadingAnalysis }: FileUpl
     try {
       const documentDataUri = await readFileAsDataURL(selectedFile);
 
-      // Note: For complex formats like DOCX, client-side parsing to text before sending
-      // might be more reliable if the AI model struggles with the raw data URI.
-      // Libraries like mammoth.js could be used for this, but require adding dependencies.
-      // const textContent = await extractTextFromDocx(selectedFile); // Example hypothetical function
-      // const analysisResult = await analyzeDocumentContent({ documentText: textContent });
-
       // Current approach: Send data URI directly to the AI flow
       const analysisResult = await analyzeDocumentContent({ documentDataUri });
 
@@ -120,6 +115,7 @@ export function FileUpload({ onAnalysisComplete, setIsLoadingAnalysis }: FileUpl
         description: error?.message || "Could not analyze the document. Please try again.",
       });
        // Clear potentially bad results
+       // Return an empty analysis result structure on error
        onAnalysisComplete({ topics: [], subtopics: [], dataPoints: [], quotes: [], summary: "Error during analysis." });
     } finally {
       setIsLoadingAnalysis(false);

@@ -7,26 +7,29 @@ import { AnalysisResults } from '@/components/analysis-results';
 import { PresentationParameters } from '@/components/presentation-parameters';
 import { PresentationPreview } from '@/components/presentation-preview';
 import { Separator } from '@/components/ui/separator';
+// Import types directly from flow files
 import type { AnalyzeDocumentContentOutput } from '@/ai/flows/document-analyzer';
+import type { GeneratePresentationOutput } from '@/ai/flows/presentation-generator';
 import { Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 
 export default function Home() {
   const [analysisResult, setAnalysisResult] = useState<AnalyzeDocumentContentOutput | null>(null);
-  const [presentationData, setPresentationData] = useState<any>(null); // Use specific type later
+  const [presentationData, setPresentationData] = useState<GeneratePresentationOutput | null>(null);
   const [isLoadingAnalysis, setIsLoadingAnalysis] = useState<boolean>(false);
   const [isGeneratingPresentation, setIsGeneratingPresentation] = useState<boolean>(false);
 
   const handleAnalysisComplete = (analysis: AnalyzeDocumentContentOutput) => {
     setAnalysisResult(analysis);
-    setPresentationData(null); // Clear previous presentation when new analysis is done
+    setPresentationData(null); // Clear previous presentation
   };
 
   const handleGenerationStart = () => {
     setIsGeneratingPresentation(true);
+    setPresentationData(null); // Clear previous presentation
   };
 
-  const handleGenerationComplete = (data: any) => {
+  const handleGenerationComplete = (data: GeneratePresentationOutput | null) => {
     setPresentationData(data);
     setIsGeneratingPresentation(false);
   };
@@ -57,17 +60,20 @@ export default function Home() {
 
           {/* Column 2: Parameters & Preview */}
           <div className="md:col-span-2 space-y-6">
-            <PresentationParameters
-              analysisData={analysisResult}
-              onGenerationStart={handleGenerationStart}
-              onGenerationComplete={handleGenerationComplete}
-              isGenerating={isGeneratingPresentation}
-            />
+             {analysisResult && !isLoadingAnalysis && (
+                <PresentationParameters
+                analysisData={analysisResult}
+                onGenerationStart={handleGenerationStart}
+                onGenerationComplete={handleGenerationComplete}
+                isGenerating={isGeneratingPresentation}
+                />
+             )}
+
             {isGeneratingPresentation && (
                <Card>
                  <CardContent className="p-6 flex items-center justify-center">
                    <Loader2 className="mr-2 h-5 w-5 animate-spin text-accent" />
-                   <span className="text-muted-foreground">Generating presentation...</span>
+                   <span className="text-muted-foreground">Generating presentation... (This may take a minute)</span>
                  </CardContent>
                </Card>
             )}

@@ -7,37 +7,22 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronLeft, ChevronRight, Edit, Save, RefreshCw, Download, Share2, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Edit, Save, RefreshCw, Download, Share2, Loader2, ImageOff } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-import type { RegenerateSlideInput, RegenerateSlideOutput } from '@/ai/flows/regenerate-slide'; // Import types
-import { regenerateSlide } from '@/ai/flows/regenerate-slide'; // Import function
+// Import types and function directly from the regenerate slide flow file
+import type { RegenerateSlideInput, RegenerateSlideOutput } from '@/ai/flows/regenerate-slide';
+import { regenerateSlide } from '@/ai/flows/regenerate-slide';
+// Import types directly from the presentation generator flow file
+import type { GeneratePresentationOutput, GeneratedSlide } from '@/ai/flows/presentation-generator';
 
-interface Slide {
-  id: number;
-  title: string;
-  content: string;
-  visuals?: string[]; // Array of image URLs or data URIs
-}
 
 interface PresentationPreviewProps {
-  presentationData: {
-    slides: Slide[];
-    metadata: any; // Add template, tone etc. if needed for regeneration
-  } | null;
+  presentationData: GeneratePresentationOutput | null;
 }
-
-// Simulate visual elements with placeholder images - Moved to PresentationParameters
-// const placeholderVisuals = [
-//   "https://picsum.photos/seed/graph/600/400",
-//   "https://picsum.photos/seed/chart/600/400",
-//   "https://picsum.photos/seed/diagram/600/400",
-//   "https://picsum.photos/seed/infographic/600/400",
-// ];
-
 
 export function PresentationPreview({ presentationData }: PresentationPreviewProps) {
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
-  const [slides, setSlides] = useState<Slide[]>([]);
+  const [slides, setSlides] = useState<GeneratedSlide[]>([]);
   const [editingSlideId, setEditingSlideId] = useState<number | null>(null);
   const [editedContent, setEditedContent] = useState<string>('');
   const [isRegenerating, setIsRegenerating] = useState<boolean>(false);
@@ -46,27 +31,61 @@ export function PresentationPreview({ presentationData }: PresentationPreviewPro
 
   useEffect(() => {
      if (presentationData?.slides) {
-       // Slides received should already have valid visual URLs or be empty arrays
-      setSlides(presentationData.slides);
-      setCurrentSlideIndex(0); // Reset to first slide when new data arrives
-      setEditingSlideId(null); // Reset editing state
+       // Filter out potential error slides if needed
+       const validSlides = presentationData.slides.filter(slide => slide.id !== 0 || !slide.title.startsWith("Error"));
+       setSlides(validSlides);
+       setCurrentSlideIndex(0);
+       setEditingSlideId(null);
     } else {
-      setSlides([]); // Clear slides if no data
+      setSlides([]);
     }
   }, [presentationData]);
 
 
   if (!presentationData || slides.length === 0) {
-    return null; // Don't render if no presentation data
+    // Handle specific error slide case from generation
+    if (presentationData && presentationData.slides.length === 1 && presentationData.slides[0].id === 0 && presentationData.slides[0].title.startsWith("Error")) {
+        return (
+             <Card className="mt-6">
+                <CardHeader>
+                    <CardTitle className="text-destructive">{presentationData.slides[0].title}</CardTitle>
+                    <CardDescription>There was an issue generating the presentation.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-muted-foreground">{presentationData.slides[0].content}</p>
+                 </CardContent>
+            </Card>
+        )
+    }
+    // Handle general case where no valid slides were generated
+    if (presentationData && slides.length === 0) {
+        return (
+             <Card className="mt-6">
+                <CardHeader>
+                    <CardTitle>Presentation Preview</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-muted-foreground">No valid slides were generated for this presentation.</p>
+                 </CardContent>
+            </Card>
+        )
+    }
+    return null; // No presentation data at all
   }
 
   const currentSlide = slides[currentSlideIndex];
-  if (!currentSlide) { // Add a check for currentSlide to prevent errors if slides array is manipulated unexpectedly
+
+  if (!currentSlide) {
+    console.error("Error: currentSlide is undefined at index", currentSlideIndex);
+    if (currentSlideIndex !== 0 && slides.length > 0) {
+        setCurrentSlideIndex(0);
+        return <Loader2 className="animate-spin mx-auto mt-10" />
+    }
     return (
         <Card className="mt-6">
             <CardHeader>
                 <CardTitle>Error</CardTitle>
-                <CardDescription>Could not load current slide.</CardDescription>
+                <CardDescription>Could not load current slide data.</CardDescription>
             </CardHeader>
         </Card>
     );
@@ -75,12 +94,12 @@ export function PresentationPreview({ presentationData }: PresentationPreviewPro
 
   const goToNextSlide = () => {
     setCurrentSlideIndex((prevIndex) => Math.min(prevIndex + 1, slides.length - 1));
-    setEditingSlideId(null); // Exit edit mode when changing slides
+    setEditingSlideId(null);
   };
 
   const goToPrevSlide = () => {
     setCurrentSlideIndex((prevIndex) => Math.max(prevIndex - 1, 0));
-     setEditingSlideId(null); // Exit edit mode
+     setEditingSlideId(null);
   };
 
   const startEditing = () => {
@@ -89,6 +108,7 @@ export function PresentationPreview({ presentationData }: PresentationPreviewPro
   };
 
   const saveEdit = () => {
+     if (editingSlideId === null) return;
     setSlides((prevSlides) =>
       prevSlides.map((slide) =>
         slide.id === editingSlideId ? { ...slide, content: editedContent } : slide
@@ -103,55 +123,50 @@ export function PresentationPreview({ presentationData }: PresentationPreviewPro
   };
 
   const handleRegenerate = async () => {
-     if (!currentSlide || !presentationData.metadata) return;
+     if (!currentSlide || !presentationData?.metadata) return;
      setIsRegenerating(true);
 
-     // Prepare input for the regenerateSlide flow
      const input: RegenerateSlideInput = {
-        slideContent: currentSlide.content, // Use current or original content? Decide based on desired UX
-        templateDetails: presentationData.metadata.template || 'Modern', // Get from metadata
-        // These should ideally come from the UI if you add controls for regeneration parameters
-        smartArtDensity: 'medium',
-        dataVisualizationPreference: 'charts',
-        contentToVisualRatio: 'balanced',
-        toneAndStyle: presentationData.metadata.toneStyle || 'professional', // Get from metadata
+        slideContent: currentSlide.content,
+        templateDetails: presentationData.metadata.template || 'Modern',
+        // These should ideally come from UI controls for regeneration parameters
+        smartArtDensity: 'medium', // Placeholder
+        dataVisualizationPreference: 'charts', // Placeholder
+        contentToVisualRatio: 'balanced', // Placeholder
+        toneAndStyle: presentationData.metadata.toneStyle || 'professional',
       };
 
       try {
         const result: RegenerateSlideOutput = await regenerateSlide(input);
-        // Update the specific slide with regenerated content
+
         setSlides((prevSlides) =>
           prevSlides.map((slide) =>
             slide.id === currentSlide.id
-              ? {
-                  ...slide,
-                  content: result.regeneratedSlide,
-                  // Potentially regenerate visuals too if the flow supports it
-                  // For now, assume visual regeneration might provide a new URL or keep existing one.
-                  // If visuals are regenerated, they should come from 'result'.
-                  // For placeholder:
-                  visuals: slide.visuals && slide.visuals.length > 0 ? [slide.visuals[0]] : ["https://picsum.photos/seed/newvisual/600/400"], // Simulate new visual if needed
-                 }
+              ? { ...slide, content: result.regeneratedSlide }
               : slide
           )
         );
-        toast({ title: "Slide Regenerated", description: `Slide ${currentSlideIndex + 1} updated.` });
+        toast({ title: "Slide Content Regenerated", description: `Slide ${currentSlideIndex + 1} text updated.` });
       } catch (error) {
           console.error("Regeneration failed:", error);
           toast({
             variant: "destructive",
             title: "Regeneration Failed",
-            description: "Could not regenerate the slide. Please try again.",
+            description: "Could not regenerate the slide content. Please try again.",
           });
       } finally {
           setIsRegenerating(false);
       }
   };
 
-   // Placeholder actions
   const handleExportPPTX = () => toast({ title: "Export PPTX", description: "Feature coming soon!" });
   const handleExportPDF = () => toast({ title: "Export PDF", description: "Feature coming soon!" });
   const handleShare = () => toast({ title: "Share Presentation", description: "Feature coming soon!" });
+
+  const getAiHint = (prompt?: string): string => {
+    if (!prompt) return 'visual element';
+    return prompt.split(' ').slice(0, 2).join(' ').toLowerCase() || 'visual element';
+  };
 
 
   return (
@@ -177,18 +192,21 @@ export function PresentationPreview({ presentationData }: PresentationPreviewPro
 
          <Card className="overflow-hidden mb-4 shadow-md">
              <CardContent className="p-0 aspect-[16/9] flex flex-col md:flex-row">
-                 {/* Slide Content Area */}
+                {/* Slide Content Area */}
                 <div className="w-full md:w-1/2 p-6 bg-background flex flex-col">
-                    <h3 className="text-xl font-semibold mb-4">{currentSlide.title}</h3>
+                    <CardTitle className="text-xl font-semibold mb-4">{currentSlide.title}</CardTitle>
                     {editingSlideId === currentSlide.id ? (
                         <Textarea
                         value={editedContent}
                         onChange={(e) => setEditedContent(e.target.value)}
                         className="flex-grow resize-none text-sm"
+                        aria-label="Edit slide content"
                         />
                     ) : (
                         <ScrollArea className="flex-grow">
-                         <p className="text-sm whitespace-pre-wrap">{currentSlide.content}</p>
+                         <div className="text-sm whitespace-pre-wrap prose prose-sm dark:prose-invert max-w-none">
+                            {currentSlide.content}
+                         </div>
                         </ScrollArea>
                     )}
                     <div className="mt-4 flex gap-2">
@@ -206,27 +224,57 @@ export function PresentationPreview({ presentationData }: PresentationPreviewPro
                            onClick={handleRegenerate}
                            disabled={isRegenerating || editingSlideId !== null}
                            className="ml-auto"
+                           title="Regenerate slide content using AI"
                          >
                            {isRegenerating ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <RefreshCw className="mr-1 h-4 w-4" />}
-                           Regenerate
+                           Regenerate Content
                          </Button>
                     </div>
                 </div>
                  {/* Visual Area */}
-                <div className="w-full md:w-1/2 bg-secondary flex items-center justify-center p-4">
-                  {currentSlide.visuals && currentSlide.visuals.length > 0 && currentSlide.visuals[0] ? (
+                <div className="w-full md:w-1/2 bg-secondary flex items-center justify-center p-4 border-l">
+                  {currentSlide.visualDataUri ? (
                      <div className="relative w-full h-full">
-                      <Image
-                        src={currentSlide.visuals[0]} // Display first visual
-                        alt={`Visual for ${currentSlide.title}`}
-                        layout="fill"
-                        objectFit="contain"
-                        data-ai-hint="chart graph" 
-                      />
+                     {typeof currentSlide.visualDataUri === 'string' && (currentSlide.visualDataUri.startsWith('data:image') || currentSlide.visualDataUri.startsWith('https://')) ? (
+                            <Image
+                                src={currentSlide.visualDataUri}
+                                alt={`Visual for ${currentSlide.title}`}
+                                layout="fill" // Use fill for responsive sizing within the container
+                                objectFit="contain" // Ensure the whole image is visible
+                                data-ai-hint={getAiHint(currentSlide.visualPrompt)}
+                                onError={(e) => {
+                                    console.error("Image load error:", e);
+                                    toast({ variant: "destructive", title:"Image Error", description: "Could not load visual for this slide."})
+                                    // Display placeholder on error
+                                    const parent = e.currentTarget.parentNode;
+                                    if (parent) {
+                                        parent.innerHTML = `
+                                            <div class="text-center text-destructive-foreground p-4 bg-destructive rounded flex flex-col items-center justify-center h-full">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-image-off h-8 w-8 mb-2"><path d="M10.41 10.41a2 2 0 1 1-2.83-2.83"/><line x1="2" x2="22" y1="2" y2="22"/><path d="M11.73 21.73a9.36 9.36 0 0 0 10.07-10.1"/><path d="M12.27 2.27a9.357 9.357 0 0 0-10 10.07"/><path d="M14 14l-1.5 2-1-1L9 18"/><path d="M19 12v3a2 2 0 0 1-2 2H9"/><path d="M6.5 8.5c1.69 0 3.14.83 4 2.09"/><path d="M5 12V9a2 2 0 0 1 2-2h3"/></svg>
+                                                <p>Error loading image</p>
+                                            </div>`;
+                                    }
+                                }}
+                                unoptimized={currentSlide.visualDataUri.startsWith('data:image')}
+                            />
+                         ) : (
+                             <div className="text-center text-destructive-foreground p-4 bg-destructive rounded flex flex-col items-center justify-center h-full">
+                                 <ImageOff className="h-8 w-8 mb-2" />
+                                 <p>Invalid visual data format</p>
+                                 <p className="text-xs mt-1">{currentSlide.visualPrompt || 'No prompt available'}</p>
+                             </div>
+                         )}
                      </div>
                   ) : (
-                    <div className="text-center text-muted-foreground">
-                        <p>No visual element</p>
+                    <div className="text-center text-muted-foreground p-4 flex flex-col items-center justify-center h-full">
+                        <ImageOff className="h-8 w-8 mb-2" />
+                        <p>No visual element for this slide</p>
+                         {currentSlide.visualPrompt && currentSlide.visualPrompt.startsWith('Error') && (
+                             <p className="text-xs mt-1 text-destructive">{currentSlide.visualPrompt}</p>
+                         )}
+                         {currentSlide.visualPrompt && !currentSlide.visualPrompt.startsWith('Error') && !currentSlide.visualDataUri && (
+                             <p className="text-xs mt-1">(Visual prompt: {currentSlide.visualPrompt})</p>
+                         )}
                      </div>
                    )}
                 </div>
@@ -235,7 +283,7 @@ export function PresentationPreview({ presentationData }: PresentationPreviewPro
 
 
       </CardContent>
-       <CardFooter className="flex justify-end gap-2">
+       <CardFooter className="flex justify-end gap-2 border-t pt-4">
           <Button variant="outline" onClick={handleExportPPTX}><Download className="mr-2 h-4 w-4" /> Export PPTX</Button>
           <Button variant="outline" onClick={handleExportPDF}><Download className="mr-2 h-4 w-4" /> Export PDF</Button>
           <Button onClick={handleShare}><Share2 className="mr-2 h-4 w-4" /> Share</Button>

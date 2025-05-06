@@ -10,26 +10,17 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { z } from 'genkit';
+import {
+    AnalyzeDocumentContentInputSchema,
+    AnalyzeDocumentContentOutputSchema
+} from '@/ai/schemas/document-analyzer-schemas'; // Import schemas
 
-const AnalyzeDocumentContentInputSchema = z.object({
-  documentDataUri: z
-    .string()
-    .describe(
-      "The document to analyze, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'. Supported types include PDF, DOCX, TXT."
-    ),
-});
+// Define TypeScript types based on the imported Zod schemas
 export type AnalyzeDocumentContentInput = z.infer<typeof AnalyzeDocumentContentInputSchema>;
-
-const AnalyzeDocumentContentOutputSchema = z.object({
-  topics: z.array(z.string()).describe('Key topics identified in the document.'),
-  subtopics: z.array(z.string()).describe('Subtopics for each key topic.'),
-  dataPoints: z.array(z.string()).describe('Important data points extracted from the document.'),
-  quotes: z.array(z.string()).describe('Key quotes extracted from the document.'),
-  summary: z.string().describe('A concise summary of the document content.'),
-});
 export type AnalyzeDocumentContentOutput = z.infer<typeof AnalyzeDocumentContentOutputSchema>;
 
+// Export the main async function
 export async function analyzeDocumentContent(
   input: AnalyzeDocumentContentInput
 ): Promise<AnalyzeDocumentContentOutput> {
@@ -38,6 +29,7 @@ export async function analyzeDocumentContent(
   return analyzeDocumentContentFlow(input);
 }
 
+// Define the prompt using the imported schemas
 const analyzeDocumentContentPrompt = ai.definePrompt({
   name: 'analyzeDocumentContentPrompt',
   input: {schema: AnalyzeDocumentContentInputSchema},
@@ -60,7 +52,7 @@ const analyzeDocumentContentPrompt = ai.definePrompt({
   `,
 });
 
-
+// Define the flow using the imported schemas
 const analyzeDocumentContentFlow = ai.defineFlow(
   {
     name: 'analyzeDocumentContentFlow',
@@ -75,3 +67,6 @@ const analyzeDocumentContentFlow = ai.defineFlow(
     return output!;
   }
 );
+
+// DO NOT export schemas or other non-async function values from this 'use server' file.
+// Only export the main async function and potentially TypeScript types.

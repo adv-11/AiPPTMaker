@@ -9,41 +9,22 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { z } from 'genkit';
+import {
+    RegenerateSlideInputSchema,
+    RegenerateSlideOutputSchema
+} from '@/ai/schemas/regenerate-slide-schemas'; // Import schemas
 
-const RegenerateSlideInputSchema = z.object({
-  slideContent: z
-    .string()
-    .describe('The content of the slide to be regenerated.'),
-  templateDetails: z
-    .string()
-    .describe('Details of the template being used for the presentation.'),
-  smartArtDensity: z
-    .enum(['low', 'medium', 'high'])
-    .describe('The desired density of smart art on the slide.'),
-  dataVisualizationPreference: z
-    .string()
-    .describe('The preferred type of data visualization (charts, graphs, infographics).'),
-  contentToVisualRatio: z
-    .string()
-    .describe('The desired ratio of content to visual elements on the slide.'),
-  toneAndStyle: z
-    .string()
-    .describe('The desired tone and style of the slide (professional, casual, bold, etc.).'),
-});
+// Define TypeScript types based on the imported Zod schemas
 export type RegenerateSlideInput = z.infer<typeof RegenerateSlideInputSchema>;
-
-const RegenerateSlideOutputSchema = z.object({
-  regeneratedSlide: z
-    .string()
-    .describe('The regenerated slide content with the new parameters.'),
-});
 export type RegenerateSlideOutput = z.infer<typeof RegenerateSlideOutputSchema>;
 
+// Export the main async function
 export async function regenerateSlide(input: RegenerateSlideInput): Promise<RegenerateSlideOutput> {
   return regenerateSlideFlow(input);
 }
 
+// Define the prompt using the imported schemas
 const prompt = ai.definePrompt({
   name: 'regenerateSlidePrompt',
   input: {schema: RegenerateSlideInputSchema},
@@ -63,6 +44,7 @@ const prompt = ai.definePrompt({
   The design should follow the selected template: {{{templateDetails}}}`,
 });
 
+// Define the flow using the imported schemas
 const regenerateSlideFlow = ai.defineFlow(
   {
     name: 'regenerateSlideFlow',
@@ -74,3 +56,6 @@ const regenerateSlideFlow = ai.defineFlow(
     return output!;
   }
 );
+
+// DO NOT export schemas or other non-async function values from this 'use server' file.
+// Only export the main async function and potentially TypeScript types.

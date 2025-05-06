@@ -1,56 +1,77 @@
+// src/ai/flows/visualizer.ts
 'use server';
 
 /**
- * @fileOverview AI flow to transform extracted data and information into visually appealing smart art, charts, and infographics.
+ * @fileOverview AI flow to transform provided text/data into a visually appealing image (chart, graph, diagram, infographic) suitable for a presentation slide.
  *
- * - generateVisuals - A function that handles the generation of visuals from data.
+ * - generateVisuals - A function that handles the generation of a single visual from data.
  * - GenerateVisualsInput - The input type for the generateVisuals function.
  * - GenerateVisualsOutput - The return type for the generateVisuals function.
  */
 
 import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { z } from 'genkit';
+import {
+    GenerateVisualsInputSchema,
+    GenerateVisualsOutputSchema
+} from '@/ai/schemas/visualizer-schemas'; // Import schemas
 
-const GenerateVisualsInputSchema = z.object({
-  data: z.string().describe('The data to visualize.'),
-  templateDetails: z.string().describe('Details of the selected template, including color scheme, font styles, and layout patterns.'),
-});
+// Define TypeScript types based on the imported Zod schemas
 export type GenerateVisualsInput = z.infer<typeof GenerateVisualsInputSchema>;
-
-const GenerateVisualsOutputSchema = z.object({
-  visualElements: z.array(z.string()).describe('Array of generated visual elements (smart art, charts, infographics) as data URIs.'),
-});
 export type GenerateVisualsOutput = z.infer<typeof GenerateVisualsOutputSchema>;
 
-export async function generateVisuals(input: GenerateVisualsInput): Promise<GenerateVisualsOutput> {
-  return generateVisualsFlow(input);
-}
-
-const prompt = ai.definePrompt({
-  name: 'generateVisualsPrompt',
-  input: {schema: GenerateVisualsInputSchema},
-  output: {schema: GenerateVisualsOutputSchema},
-  prompt: `You are an AI presentation design assistant. Your task is to transform the given data into visually appealing elements (smart art, charts, and infographics) suitable for a presentation slide, following the guidelines of the selected template.
-
-Data to visualize: {{{data}}}
-
-Template details: {{{templateDetails}}}
-
-Output an array of data URIs for each visual element generated.
-
-Example output: ["data:image/png;base64,iVBORw0KGgoAAAANSUhEUg...", "data:image/svg+xml,...", ...]
-`,
-});
-
+// Define the generateVisuals flow using the imported schemas
 const generateVisualsFlow = ai.defineFlow(
   {
     name: 'generateVisualsFlow',
     inputSchema: GenerateVisualsInputSchema,
     outputSchema: GenerateVisualsOutputSchema,
   },
-  async input => {
-    //TODO: Call to a service that generates data visualizations.
-    const {output} = await prompt(input);
-    return output!;
+  async (input) => {
+    const generationPrompt = `Generate a single visual element (like a chart, graph, diagram, or infographic) suitable for a presentation slide based on the following:
+
+Data/Description: ${input.promptText}
+
+${input.templateDetails ? `Consider these template details for styling: ${input.templateDetails}` : ''}
+
+Create a clean, professional-looking visual representation. Ensure data accuracy if numerical data is provided in the description. Focus on clarity and readability for a presentation context. Output ONLY the image.`;
+
+    const {media} = await ai.generate({
+      // IMPORTANT: ONLY the googleai/gemini-2.0-flash-exp model is able to generate images.
+      model: 'googleai/gemini-2.0-flash-exp',
+      prompt: generationPrompt,
+      config: {
+        // MUST provide both TEXT and IMAGE, IMAGE only won't work
+        responseModalities: ['TEXT', 'IMAGE'],
+        // Optional: Add parameters like aspect ratio if needed
+        // generationConfig: {
+        //   imageConfig: { aspectRatio: '16:9' } // Example
+        // }
+      },
+    });
+
+    if (!media || !media.url) {
+        throw new Error("Image generation failed or returned no media URL.");
+    }
+
+    // Assuming the first media part is the image we want
+    return { visualDataUri: media.url };
   }
 );
+
+// Exported wrapper function to call the flow
+export async function generateVisuals(input: GenerateVisualsInput): Promise<GenerateVisualsOutput> {
+    console.log("Generating visual for:", input.promptText);
+    try {
+        const result = await generateVisualsFlow(input);
+        console.log("Visual generation successful.");
+        return result;
+    } catch (error) {
+        console.error("Error in generateVisuals flow:", error);
+        // Rethrow or return a specific error structure
+        throw new Error(`Failed to generate visual: ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
+
+// DO NOT export schemas or other non-async function values from this 'use server' file.
+// Only export the main async function and potentially TypeScript types.

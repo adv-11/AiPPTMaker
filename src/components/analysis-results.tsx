@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
+// Import the type directly from the flow file
 import type { AnalyzeDocumentContentOutput } from '@/ai/flows/document-analyzer';
 import { ScrollArea } from "@/components/ui/scroll-area";
 
