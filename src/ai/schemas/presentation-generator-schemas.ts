@@ -7,8 +7,8 @@ export const GeneratedSlideSchema = z.object({
     id: z.number().describe('Unique identifier for the slide.'),
     title: z.string().describe('The title of the slide.'),
     content: z.string().describe('The main text content of the slide.'),
-    visualDataUri: z.string().optional().describe('Optional URL or data URI for a visual element. Can be an HTTPS URL found via web search OR a base64 data URI (e.g., "data:image/png;base64,...") for AI-generated charts/diagrams. Null or omitted if no visual is used.'),
-    visualPrompt: z.string().optional().describe('The prompt used to generate the visual OR the query used for web search. Null or omitted if no visual is used.')
+    visualDataUri: z.string().nullable().optional().describe('Optional URL or data URI for a visual element. Can be an HTTPS URL found via web search OR a base64 data URI (e.g., "data:image/png;base64,...") for AI-generated charts/diagrams. Null or omitted if no visual is used.'),
+    visualPrompt: z.string().nullable().optional().describe('The prompt used to generate the visual OR the query used for web search. Null or omitted if no visual is used.')
 });
 
 // Define the input schema, combining analysis and parameters
@@ -38,3 +38,4 @@ export const GeneratePresentationOutputSchema = z.object({
         // Add other relevant params if needed downstream
     }).describe('Metadata about the generated presentation.'),
 });
+
