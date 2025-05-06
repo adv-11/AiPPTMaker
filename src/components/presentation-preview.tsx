@@ -52,7 +52,7 @@ export function PresentationPreview({ presentationData }: PresentationPreviewPro
                     <CardDescription>There was an issue generating the presentation.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-muted-foreground">{presentationData.slides[0].content}</p>
+                    <p className="text-muted-foreground break-words">{presentationData.slides[0].content}</p>
                  </CardContent>
             </Card>
         )
@@ -163,7 +163,7 @@ export function PresentationPreview({ presentationData }: PresentationPreviewPro
   const handleExportPDF = () => toast({ title: "Export PDF", description: "Feature coming soon!" });
   const handleShare = () => toast({ title: "Share Presentation", description: "Feature coming soon!" });
 
-  const getAiHint = (prompt?: string): string => {
+  const getAiHint = (prompt?: string | null): string => {
     if (!prompt) return 'visual element';
     return prompt.split(' ').slice(0, 2).join(' ').toLowerCase() || 'visual element';
   };
@@ -232,49 +232,43 @@ export function PresentationPreview({ presentationData }: PresentationPreviewPro
                     </div>
                 </div>
                  {/* Visual Area */}
-                <div className="w-full md:w-1/2 bg-secondary flex items-center justify-center p-4 border-l">
-                  {currentSlide.visualDataUri ? (
-                     <div className="relative w-full h-full">
-                     {typeof currentSlide.visualDataUri === 'string' && (currentSlide.visualDataUri.startsWith('data:image') || currentSlide.visualDataUri.startsWith('https://')) ? (
-                            <Image
-                                src={currentSlide.visualDataUri}
-                                alt={`Visual for ${currentSlide.title}`}
-                                layout="fill" // Use fill for responsive sizing within the container
-                                objectFit="contain" // Ensure the whole image is visible
-                                data-ai-hint={getAiHint(currentSlide.visualPrompt)}
-                                onError={(e) => {
-                                    console.error("Image load error:", e);
-                                    toast({ variant: "destructive", title:"Image Error", description: "Could not load visual for this slide."})
-                                    // Display placeholder on error
-                                    const parent = e.currentTarget.parentNode;
-                                    if (parent) {
-                                        parent.innerHTML = `
-                                            <div class="text-center text-destructive-foreground p-4 bg-destructive rounded flex flex-col items-center justify-center h-full">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-image-off h-8 w-8 mb-2"><path d="M10.41 10.41a2 2 0 1 1-2.83-2.83"/><line x1="2" x2="22" y1="2" y2="22"/><path d="M11.73 21.73a9.36 9.36 0 0 0 10.07-10.1"/><path d="M12.27 2.27a9.357 9.357 0 0 0-10 10.07"/><path d="M14 14l-1.5 2-1-1L9 18"/><path d="M19 12v3a2 2 0 0 1-2 2H9"/><path d="M6.5 8.5c1.69 0 3.14.83 4 2.09"/><path d="M5 12V9a2 2 0 0 1 2-2h3"/></svg>
-                                                <p>Error loading image</p>
-                                            </div>`;
-                                    }
-                                }}
-                                unoptimized={currentSlide.visualDataUri.startsWith('data:image')}
-                            />
-                         ) : (
-                             <div className="text-center text-destructive-foreground p-4 bg-destructive rounded flex flex-col items-center justify-center h-full">
-                                 <ImageOff className="h-8 w-8 mb-2" />
-                                 <p>Invalid visual data format</p>
-                                 <p className="text-xs mt-1">{currentSlide.visualPrompt || 'No prompt available'}</p>
-                             </div>
-                         )}
-                     </div>
+                <div className="w-full md:w-1/2 bg-secondary flex items-center justify-center p-4 border-l relative">
+                  {currentSlide.visualDataUri && typeof currentSlide.visualDataUri === 'string' && (currentSlide.visualDataUri.startsWith('data:image') || /^(https?:\/\/)/.test(currentSlide.visualDataUri)) ? (
+                     <Image
+                        src={currentSlide.visualDataUri}
+                        alt={`Visual for ${currentSlide.title}`}
+                        layout="fill" // Use fill for responsive sizing within the container
+                        objectFit="contain" // Ensure the whole image is visible
+                        data-ai-hint={getAiHint(currentSlide.visualPrompt)}
+                        onError={(e) => {
+                            console.error("Image load error:", e, "Src:", currentSlide.visualDataUri);
+                            toast({ variant: "destructive", title:"Image Error", description: "Could not load visual for this slide."})
+                            // Replace the image with an error message directly in the DOM
+                             const parent = e.currentTarget.parentNode;
+                             if (parent) {
+                                 parent.innerHTML = `
+                                     <div class="text-center text-destructive-foreground p-4 bg-destructive rounded flex flex-col items-center justify-center h-full w-full absolute top-0 left-0">
+                                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-image-off h-8 w-8 mb-2"><path d="M10.41 10.41a2 2 0 1 1-2.83-2.83"/><line x1="2" x2="22" y1="2" y2="22"/><path d="M11.73 21.73a9.36 9.36 0 0 0 10.07-10.1"/><path d="M12.27 2.27a9.357 9.357 0 0 0-10 10.07"/><path d="M14 14l-1.5 2-1-1L9 18"/><path d="M19 12v3a2 2 0 0 1-2 2H9"/><path d="M6.5 8.5c1.69 0 3.14.83 4 2.09"/><path d="M5 12V9a2 2 0 0 1 2-2h3"/></svg>
+                                         <p>Error loading image</p>
+                                     </div>`;
+                             }
+                        }}
+                        unoptimized={currentSlide.visualDataUri.startsWith('data:image')} // Keep unoptimized for base64
+                    />
                   ) : (
                     <div className="text-center text-muted-foreground p-4 flex flex-col items-center justify-center h-full">
                         <ImageOff className="h-8 w-8 mb-2" />
-                        <p>No visual element for this slide</p>
-                         {currentSlide.visualPrompt && currentSlide.visualPrompt.startsWith('Error') && (
+                        {currentSlide.visualDataUri && typeof currentSlide.visualDataUri === 'string' ? (
+                            <p>Invalid visual data format</p>
+                         ) : (
+                             <p>No visual element for this slide</p>
+                         )}
+                         {currentSlide.visualPrompt && currentSlide.visualPrompt.startsWith('Error generating visual') && (
                              <p className="text-xs mt-1 text-destructive">{currentSlide.visualPrompt}</p>
                          )}
-                         {currentSlide.visualPrompt && !currentSlide.visualPrompt.startsWith('Error') && !currentSlide.visualDataUri && (
-                             <p className="text-xs mt-1">(Visual prompt: {currentSlide.visualPrompt})</p>
-                         )}
+                          {currentSlide.visualPrompt && !currentSlide.visualPrompt.startsWith('Error generating visual') && !currentSlide.visualDataUri && (
+                              <p className="text-xs mt-1">(Visual prompt: {currentSlide.visualPrompt})</p>
+                          )}
                      </div>
                    )}
                 </div>

@@ -7,8 +7,8 @@ export const GeneratedSlideSchema = z.object({
     id: z.number().describe('Unique identifier for the slide.'),
     title: z.string().describe('The title of the slide.'),
     content: z.string().describe('The main text content of the slide.'),
-    visualDataUri: z.string().optional().describe('Optional data URI for a visual element (chart, graph, image) generated for this slide. Format: "data:image/png;base64,..." or a direct image URL if found via web search.'),
-    visualPrompt: z.string().optional().describe('The prompt used to generate the visual, if any. If a web search was used for an image, this might be the search query.')
+    visualDataUri: z.string().nullable().optional().describe('Optional data URI for a visual element (chart, graph, image) generated for this slide. Format: "data:image/png;base64,..." or a direct image URL if found via web search. Can be null if no visual is generated or found.'),
+    visualPrompt: z.string().nullable().optional().describe('The prompt used to generate the visual, if any. If a web search was used for an image, this might be the search query. Can be null.')
 });
 
 // Define the input schema, combining analysis and parameters
