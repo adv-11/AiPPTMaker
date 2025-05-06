@@ -7,8 +7,8 @@ export const GeneratedSlideSchema = z.object({
     id: z.number().describe('Unique identifier for the slide.'),
     title: z.string().describe('The title of the slide.'),
     content: z.string().describe('The main text content of the slide.'),
-    visualDataUri: z.string().nullable().optional().describe('Optional data URI for a visual element (chart, graph, image) generated for this slide. Format: "data:image/png;base64,..." or a direct image URL if found via web search. Can be null if no visual is generated or found.'),
-    visualPrompt: z.string().nullable().optional().describe('The prompt used to generate the visual, if any. If a web search was used for an image, this might be the search query. Can be null.')
+    visualDataUri: z.string().optional().describe('Optional URL or data URI for a visual element. Can be an HTTPS URL found via web search OR a base64 data URI (e.g., "data:image/png;base64,...") for AI-generated charts/diagrams. Null or omitted if no visual is used.'),
+    visualPrompt: z.string().optional().describe('The prompt used to generate the visual OR the query used for web search. Null or omitted if no visual is used.')
 });
 
 // Define the input schema, combining analysis and parameters
@@ -24,7 +24,7 @@ export const GeneratePresentationInputSchema = z.object({
   numSlides: z.number().optional().describe('Target number of slides. AI will decide if not provided.'),
   template: z.string().describe('Selected presentation template name (e.g., Modern, Corporate).'),
   smartArtDensity: z.enum(['low', 'medium', 'high']).describe('Desired density of smart art/visuals.'),
-  dataVizPreference: z.string().describe('Preferred type of data visualization (e.g., "charts", "graphs", "infographics", "web-images"). Include "web-images" if seeking real-world images via search.'),
+  dataVizPreference: z.string().describe('Preferred type of data visualization (e.g., "charts", "graphs", "infographics", "web-images"). Use "web-images" to prioritize searching for existing images online.'),
   contentVisualRatio: z.string().describe('Desired ratio of content to visuals (text-heavy, balanced, visual-heavy).'),
   toneStyle: z.string().describe('Desired tone and style (professional, casual, bold, informative).'),
 });

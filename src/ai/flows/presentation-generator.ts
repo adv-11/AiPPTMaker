@@ -28,13 +28,13 @@ import {
 const webSearchTool = ai.defineTool(
     {
         name: 'webSearch',
-        description: 'Performs a web search for information or images based on a query.',
-        inputSchema: z.object({ query: z.string().describe("The search query.") }),
-        outputSchema: z.object({ results: z.array(z.object({ title: z.string(), link: z.string(), snippet: z.string().optional() })).describe("Search results.") }),
+        description: 'Performs a web search for information or images based on a query. Use this ONLY for finding existing images on the web, NOT for generating new ones.',
+        inputSchema: z.object({ query: z.string().describe("The search query for a suitable image.") }),
+        outputSchema: z.object({ results: z.array(z.object({ title: z.string(), link: z.string().describe("URL link to the search result. Prioritize direct image URLs (e.g., ending in .jpg, .png, .gif or from known image sites like picsum.photos)."), snippet: z.string().optional() })).describe("Search results. Aim for results with image URLs.") }),
     },
     async ({ query }) => {
         // Placeholder: In a real implementation, this would call a search API (Google Search, Bing, etc.)
-        console.log(`Performing web search for: ${query}`);
+        console.log(`Performing web search for image: ${query}`);
         // Simulate finding some relevant results
         await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
         // Use picsum for placeholder images identifiable by URL structure
@@ -42,19 +42,18 @@ const webSearchTool = ai.defineTool(
          // Prioritize picsum link if possible, otherwise fallback
          const picsumUrl = `https://picsum.photos/seed/${imageSeed}/400/300`;
          let imageResult = { title: `Image Result for ${query}`, link: picsumUrl, snippet: `An image related to ${query}.` };
-         // Simulate sometimes not finding a direct image URL
-         // const shouldFindImage = Math.random() > 0.1; // 90% chance to find image URL
-         // if (!shouldFindImage) {
-         //     imageResult = { title: `Web page about ${query}`, link: `https://example.com/info/${imageSeed}`, snippet: `Information about ${query}.` };
-         // }
 
+        // Simulate sometimes finding non-image links too
+        const webPageResult = { title: `Web page about ${query}`, link: `https://example.com/info/${imageSeed}`, snippet: `Information about ${query}.` };
+        const otherImageResult = { title: `Another Image Result for ${query}`, link: `https://picsum.photos/seed/${imageSeed}-alt/400/300`, snippet: `Alternative image for ${query}.` };
 
         return {
+            // Mix results, ensuring the primary picsum URL is usually first
             results: [
-                { title: `Result 1 for ${query}`, link: `https://example.com/search?q=${encodeURIComponent(query)}&n=1`, snippet: `This is a snippet for the first result related to ${query}.` },
                 imageResult,
-                { title: `Result 3 for ${query}`, link: `https://example.com/search?q=${encodeURIComponent(query)}&n=3`, snippet: `Another relevant snippet for ${query}.` },
-            ]
+                webPageResult,
+                otherImageResult,
+            ].sort(() => Math.random() - 0.5) // Randomize slightly
         };
     }
 );
@@ -74,9 +73,9 @@ const presentationStructurePrompt = ai.definePrompt({
     name: 'presentationStructurePrompt',
     input: { schema: GeneratePresentationInputSchema },
     output: { schema: GeneratePresentationOutputSchema },
-    tools: [webSearchTool],
-    system: "You are an AI Presentation Assistant. Use the available tools, like web search, when necessary to find relevant information or images for the slides, especially if the user prefers 'web-images' for visuals. Strictly adhere to the output JSON schema.",
-    prompt: `You are an AI Presentation Assistant. Your task is to create a compelling presentation structure based on the provided document analysis and user preferences.
+    tools: [webSearchTool], // Make web search available
+    system: "You are an AI Presentation Assistant. Your primary goal is to structure a presentation and identify relevant VISUALS FROM THE WEB using the webSearch tool. Only suggest AI generation for charts, graphs, or diagrams if explicitly appropriate based on content and preferences; otherwise, search the web for existing images. Strictly adhere to the output JSON schema.",
+    prompt: `You are an AI Presentation Assistant. Create a presentation structure based on the document analysis and user preferences. Focus on finding relevant IMAGES FROM THE WEB using the webSearch tool.
 
     **Document Analysis:**
     Summary: {{{analysisData.summary}}}
@@ -89,31 +88,37 @@ const presentationStructurePrompt = ai.definePrompt({
     {{#if numSlides}}Target Number of Slides: {{{numSlides}}}{{else}}Number of Slides: Determine automatically based on content (aim for conciseness).{{/if}}
     Template: {{{template}}}
     Smart Art/Visual Density: {{{smartArtDensity}}}
-    Data Visualization Preference: {{{dataVizPreference}}} (Use web search if 'web-images' is preferred and appropriate)
+    Data Visualization Preference: {{{dataVizPreference}}} (Use 'web-images' to prioritize web search)
     Content/Visual Ratio: {{{contentVisualRatio}}}
     Tone & Style: {{{toneStyle}}}
 
     **Instructions:**
 
-    1.  **Determine Slide Structure:** Decide on the number of slides (if not specified), slide titles, and the key information (text content) for each slide. Start with a title slide and end with a conclusion/summary slide. Distribute topics, subtopics, data points, and quotes logically across the slides.
-    2.  **Generate Content:** Write concise and engaging text content for each slide, adhering to the requested {{{toneStyle}}}. Summarize information appropriately.
-    3.  **Identify Visual Opportunities:** Based on the content of each slide and the user's preferences ({{{smartArtDensity}}}, {{{dataVizPreference}}}, {{{contentVisualRatio}}}), decide if a visual element (chart, graph, diagram, relevant image, infographic) would enhance the slide.
-    4.  **Create Visual Prompts & Potentially Find Images:** If a visual is needed:
-        *   For charts, graphs, diagrams, infographics: Formulate a clear and specific prompt (\`visualPrompt\`) describing the visual to be generated based on slide content (e.g., "Bar chart showing sales data: Q1 $50k, Q2 $75k", "Diagram illustrating the 3-step process"). Leave \`visualDataUri\` as null or omit it entirely in this step.
-        *   If the user prefers 'web-images' or if a relevant real-world image is suitable: Formulate a concise search query for the webSearch tool as the \`visualPrompt\` (e.g., "modern office building", "team collaboration"). Use the tool to find an image URL. If the tool returns a result with a link that looks like an image URL (e.g., ends in .jpg, .png, .gif or from picsum.photos), set the \`visualDataUri\` field to that URL. Otherwise, leave \`visualDataUri\` as null or omit it.
-        *   If no visual is needed, leave both \`visualPrompt\` and \`visualDataUri\` as null or omit them.
-    5.  **Output Format:** Return the complete presentation structure as a JSON object strictly matching the output schema (GeneratePresentationOutputSchema). Ensure each slide has an ID, title, and content. Include \`visualPrompt\` and \`visualDataUri\` only as described above. DO NOT generate base64 data URIs for charts/graphs in THIS step.
+    1.  **Determine Slide Structure:** Decide on slide titles and key text content. Start with a title slide, end with a conclusion. Distribute information logically.
+    2.  **Generate Content:** Write concise text for each slide using the requested {{{toneStyle}}}.
+    3.  **Identify Visual Needs:** Based on slide content and user preferences ({{{smartArtDensity}}}, {{{contentVisualRatio}}}, {{{dataVizPreference}}}), decide if a visual is needed.
+    4.  **Find or Describe Visuals (Prioritize Web Search):**
+        *   **If an IMAGE is suitable:**
+            *   Formulate a concise SEARCH QUERY for the \`webSearch\` tool as the \`visualPrompt\` (e.g., "modern office building", "team collaboration").
+            *   **USE THE \`webSearch\` TOOL** to find an image URL.
+            *   If the tool returns a result with a clear IMAGE URL (e.g., from picsum.photos, or ending in .jpg, .png), set the \`visualDataUri\` field to that URL. Pick the most relevant image URL if multiple are returned.
+            *   If the tool does NOT return a suitable image URL, leave \`visualDataUri\` as null (or omit it). DO NOT attempt to generate the image yourself in this step.
+        *   **If a CHART, GRAPH, DIAGRAM, or INFOGRAPHIC is more appropriate (and NOT a general image):**
+            *   Formulate a clear, descriptive prompt for AI generation as the \`visualPrompt\` (e.g., "Bar chart showing sales data: Q1 $50k, Q2 $75k", "Diagram illustrating the 3-step process").
+            *   Leave \`visualDataUri\` as null (or omit it). The visual will be generated later.
+        *   **If no visual is needed:** Leave both \`visualPrompt\` and \`visualDataUri\` as null or omit them.
+    5.  **Output Format:** Return the complete presentation structure as a JSON object strictly matching the output schema. Ensure \`visualDataUri\` contains a WEB URL if found by the tool, otherwise it should be null/omitted for later generation or if no visual is needed.
 
-    **Example Slide Object (Chart - Needs Generation Later):**
-    { "id": 1, "title": "Sales Performance Q1", "content": "Sales increased by 15% in Q1.", "visualPrompt": "Bar chart showing Q1 sales growth of 15%", "visualDataUri": null }
+    **Example Slide (Web Image Found):**
+    { "id": 1, "title": "Future Workspace", "content": "Collaboration is key.", "visualPrompt": "modern collaborative office space", "visualDataUri": "https://picsum.photos/seed/modern-collaborative-office-space/400/300" }
 
-    **Example Slide Object (Web Image - Found by Tool):**
-    { "id": 2, "title": "Future Workspace", "content": "Collaboration is key.", "visualPrompt": "modern collaborative office space", "visualDataUri": "https://picsum.photos/seed/modern-collaborative-office-space/400/300" }
+    **Example Slide (Chart - Needs Generation Later):**
+    { "id": 2, "title": "Sales Performance Q1", "content": "Sales increased by 15% in Q1.", "visualPrompt": "Bar chart showing Q1 sales growth of 15%", "visualDataUri": null }
 
-    **Example Slide Object (No Visual):**
+    **Example Slide (No Visual):**
     { "id": 3, "title": "Key Takeaways", "content": "Focus on customer retention.", "visualPrompt": null, "visualDataUri": null }
 
-    Generate the presentation structure now.
+    Generate the presentation structure now, prioritizing web search for images.
     `,
 });
 
@@ -125,8 +130,8 @@ const generatePresentationFlow = ai.defineFlow(
         outputSchema: GeneratePresentationOutputSchema,
     },
     async (input) => {
-        console.log("Generating presentation structure and identifying visuals...");
-        // 1. Get the slide structure and visual prompts/search queries from the LLM
+        console.log("Generating presentation structure and finding web images...");
+        // 1. Get the slide structure, potential web image URLs, and AI visual prompts
         const structureResponse = await presentationStructurePrompt(input);
         let slides = structureResponse.output?.slides;
         const metadata = {
@@ -140,47 +145,59 @@ const generatePresentationFlow = ai.defineFlow(
          // Ensure slides conform to schema initially, especially optional fields
          slides = slides.map(slide => ({
              ...slide,
-             visualDataUri: slide.visualDataUri || undefined, // Use undefined if null/empty
-             visualPrompt: slide.visualPrompt || undefined, // Use undefined if null/empty
+             // Ensure visualDataUri is treated as optional from the start
+             visualDataUri: slide.visualDataUri && slide.visualDataUri.trim() !== '' ? slide.visualDataUri.trim() : undefined,
+             visualPrompt: slide.visualPrompt && slide.visualPrompt.trim() !== '' ? slide.visualPrompt.trim() : undefined,
          }));
 
-        console.log(`Generated ${slides.length} slides structure.`);
+        console.log(`Generated ${slides.length} slides structure. ${slides.filter(s => s.visualDataUri).length} slides have web images found.`);
 
-        // 2. Generate visuals for slides that have prompts BUT NO visualDataUri yet
+        // 2. Generate AI visuals (Charts, Diagrams etc.) ONLY for slides that:
+        //    a) Have a visualPrompt.
+        //    b) DO NOT already have a visualDataUri (meaning web search didn't find/provide one).
+        //    c) The visualPrompt does NOT look like a web search query (heuristic: doesn't scream "image of X"). This is tricky, rely on the prompt guidance mostly.
         const visualGenerationPromises = slides.map(async (slide, index) => {
-            // Generate visual only if a prompt exists AND no visualDataUri was provided by the structure prompt (e.g., from web search)
-            if (slide.visualPrompt && !slide.visualDataUri && typeof slide.visualPrompt === 'string' && slide.visualPrompt.trim() !== '') {
-                 console.log(`Slide ${index + 1} (${slide.title}): Generating visual from prompt: "${slide.visualPrompt}"`);
+            // Check conditions for AI generation
+            const needsAiGeneration = slide.visualPrompt &&
+                                      !slide.visualDataUri &&
+                                      // Heuristic: If preference is *not* explicitly web-images, OR if prompt asks for specific chart/diagram types, generate.
+                                      (input.dataVizPreference !== 'web-images' || /chart|graph|diagram|infographic/i.test(slide.visualPrompt));
+
+            if (needsAiGeneration && typeof slide.visualPrompt === 'string') {
+                 console.log(`Slide ${index + 1} (${slide.title}): Generating AI visual (Chart/Diagram/etc.) from prompt: "${slide.visualPrompt}"`);
                  try {
-                     // Prepare input for the visualizer flow using the correct type
                      const visualInput: GenerateVisualsInput = {
-                         promptText: slide.visualPrompt,
+                         promptText: slide.visualPrompt, // Prompt should describe the chart/diagram
                          templateDetails: `Template: ${input.template}, Style: ${input.toneStyle}`
                      };
-                     const visualResult = await generateVisuals(visualInput); // Call the imported generateVisuals function
-                     console.log(`Slide ${index + 1}: Visual generated successfully.`);
-                     // Return the slide with the newly generated visualDataUri
-                     return { ...slide, visualDataUri: visualResult.visualDataUri };
+                     const visualResult = await generateVisuals(visualInput);
+                     console.log(`Slide ${index + 1}: AI Visual generated successfully.`);
+                     return { ...slide, visualDataUri: visualResult.visualDataUri }; // Store the generated data URI
                  } catch (error) {
-                     console.error(`Failed to generate visual for slide ${index + 1} ("${slide.title}") from prompt "${slide.visualPrompt}":`, error);
-                     // Keep the slide but mark the visual generation failure in the prompt (optional)
-                     return { ...slide, visualDataUri: undefined, visualPrompt: `Error generating visual from prompt "${slide.visualPrompt}": ${error instanceof Error ? error.message : 'Visual generation failed'}` };
+                     console.error(`Failed to generate AI visual for slide ${index + 1} ("${slide.title}") from prompt "${slide.visualPrompt}":`, error);
+                     // Keep slide, mark failure
+                     return { ...slide, visualDataUri: undefined, visualPrompt: `Error generating AI visual from prompt "${slide.visualPrompt}": ${error instanceof Error ? error.message : 'Visual generation failed'}` };
                  }
+            } else if (slide.visualPrompt && !slide.visualDataUri) {
+                console.log(`Slide ${index + 1} (${slide.title}): Web search requested ("${slide.visualPrompt}"), but no image URL found/provided by the tool. Skipping AI generation.`);
             }
-            // If no prompt, or visualDataUri already exists, return the slide as is
+            // If visualDataUri already exists (from web search) or no visual needed, or AI generation skipped, return slide as is
             return slide;
         });
 
-        // 3. Wait for all visual generations to complete
+        // 3. Wait for all potential AI visual generations to complete
         const slidesWithVisuals = await Promise.all(visualGenerationPromises);
-        console.log("Visual processing for slides completed.");
+        console.log("AI visual processing (if any) for slides completed.");
 
         // 4. Final cleanup: ensure visualDataUri is undefined if null/empty/invalid
         const cleanedSlides = slidesWithVisuals.map(slide => ({
              ...slide,
-             visualDataUri: slide.visualDataUri && typeof slide.visualDataUri === 'string' && slide.visualDataUri.trim() !== '' ? slide.visualDataUri : undefined,
-             visualPrompt: slide.visualPrompt && typeof slide.visualPrompt === 'string' && slide.visualPrompt.trim() !== '' ? slide.visualPrompt : undefined,
+             visualDataUri: slide.visualDataUri && typeof slide.visualDataUri === 'string' && slide.visualDataUri.trim() !== '' ? slide.visualDataUri.trim() : undefined,
+             visualPrompt: slide.visualPrompt && typeof slide.visualPrompt === 'string' && slide.visualPrompt.trim() !== '' ? slide.visualPrompt.trim() : undefined,
         }));
+
+         console.log(`Final slide count: ${cleanedSlides.length}. Slides with any visual URI: ${cleanedSlides.filter(s => s.visualDataUri).length}`);
+
 
         return { slides: cleanedSlides, metadata };
     }
@@ -191,25 +208,36 @@ export async function generatePresentation(input: GeneratePresentationInput): Pr
     try {
         const result = await generatePresentationFlow(input);
         console.log("Presentation generation successful.");
+
+        // Log details about final visuals
         result.slides.forEach((slide, index) => {
-            // More robust check for potentially invalid URLs
-             if (slide.visualDataUri && !(slide.visualDataUri.startsWith('data:image') || /^(https?:\/\/)/.test(slide.visualDataUri))) {
-                 console.warn(`Slide ${index + 1} (${slide.title}) has potentially invalid visualDataUri (neither data URI nor http(s)): ${slide.visualDataUri}`);
-                 // Optionally: Clear the invalid URI
-                 // result.slides[index].visualDataUri = undefined;
-             }
-             // Check for cases where visual failed to generate but prompt exists
-             if (!slide.visualDataUri && slide.visualPrompt?.startsWith('Error generating visual')) {
+            if (slide.visualDataUri) {
+                const type = slide.visualDataUri.startsWith('data:image') ? 'Generated AI Visual' : 'Web Image URL';
+                console.log(`Slide ${index + 1} (${slide.title}): Has visual (${type}). Prompt was: "${slide.visualPrompt || 'N/A'}"`);
+                 // Validate URL format more strictly if it's not a data URI
+                 if (!slide.visualDataUri.startsWith('data:image') && !/^(https?:\/\/)/.test(slide.visualDataUri)) {
+                     console.warn(`Slide ${index + 1} (${slide.title}) has potentially invalid visualDataUri (neither data URI nor http(s)): ${slide.visualDataUri}`);
+                     // Optionally clear invalid URI
+                     // result.slides[index].visualDataUri = undefined;
+                 }
+            } else if (slide.visualPrompt?.startsWith('Error generating')) {
                  console.warn(`Slide ${index + 1} (${slide.title}): Visual generation failed. Prompt: ${slide.visualPrompt}`);
-             }
+            } else if (slide.visualPrompt) {
+                console.log(`Slide ${index + 1} (${slide.title}): Had visual prompt "${slide.visualPrompt}", but no visual URI ended up in the final output.`);
+            } else {
+                 console.log(`Slide ${index + 1} (${slide.title}): No visual needed or generated.`);
+            }
         });
+
         return result;
     } catch (error) {
         console.error("Error in generatePresentation flow:", error);
          // Provide a more informative error message back to the UI
          let errorMessage = `Failed to generate presentation: ${error instanceof Error ? error.message : String(error)}`;
          if (error instanceof Error && error.message.includes('Schema validation failed')) {
-            errorMessage = `Failed to generate presentation: The AI model did not return data in the expected format. Details: ${error.message}`;
+            errorMessage = `Failed to generate presentation: The AI model did not return data in the expected format. Check server logs for details. Details: ${error.message}`;
+         } else if (error instanceof Error && error.message.includes('deadline')) {
+             errorMessage = `Failed to generate presentation: The request timed out. This might be due to a complex request or network issues. Please try again.`;
          }
 
          const errorOutput: GeneratePresentationOutput = {
@@ -225,6 +253,3 @@ export async function generatePresentation(input: GeneratePresentationInput): Pr
          return errorOutput;
     }
 }
-
-// DO NOT export schemas or other non-async function values from this 'use server' file.
-// Only export the main async function and potentially TypeScript types.

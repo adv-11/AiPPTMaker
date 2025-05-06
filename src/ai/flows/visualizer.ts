@@ -2,7 +2,7 @@
 'use server';
 
 /**
- * @fileOverview AI flow to transform provided text/data into a visually appealing image (chart, graph, diagram, infographic) suitable for a presentation slide.
+ * @fileOverview AI flow to transform provided text/data into a specific visual element like a chart, graph, or diagram for a presentation slide. DOES NOT generate general images.
  *
  * - generateVisuals - A function that handles the generation of a single visual from data.
  * - GenerateVisualsInput - The input type for the generateVisuals function.
@@ -28,13 +28,15 @@ const generateVisualsFlow = ai.defineFlow(
     outputSchema: GenerateVisualsOutputSchema,
   },
   async (input) => {
-    const generationPrompt = `Generate a single visual element (like a chart, graph, diagram, or infographic) suitable for a presentation slide based on the following:
+    const generationPrompt = `Generate a SINGLE specific visual element LIKE A CHART, GRAPH, DIAGRAM, or INFOGRAPHIC suitable for a presentation slide based ONLY on the following description. DO NOT generate a general photographic image.
 
 Data/Description: ${input.promptText}
 
 ${input.templateDetails ? `Consider these template details for styling: ${input.templateDetails}` : ''}
 
-Create a clean, professional-looking visual representation. Ensure data accuracy if numerical data is provided in the description. Focus on clarity and readability for a presentation context. Output ONLY the image.`;
+Create a clean, professional-looking visual representation (e.g., bar chart, flow diagram). Ensure data accuracy if numerical data is provided. Focus on clarity and readability for a presentation context. Output ONLY the image data URI.`;
+
+    console.log(`Visualizer: Generating specific visual (chart/graph/etc.) for prompt: "${input.promptText}"`)
 
     const {media} = await ai.generate({
       // IMPORTANT: ONLY the googleai/gemini-2.0-flash-exp model is able to generate images.
@@ -50,8 +52,9 @@ Create a clean, professional-looking visual representation. Ensure data accuracy
       },
     });
 
-    if (!media || !media.url) {
-        throw new Error("Image generation failed or returned no media URL.");
+    if (!media || !media.url || !media.url.startsWith('data:image')) {
+        console.error(`Visualizer: Image generation failed or returned invalid media URL for prompt: "${input.promptText}". Received:`, media);
+        throw new Error("AI visual generation failed or returned an invalid data URI.");
     }
 
     // Assuming the first media part is the image we want
@@ -61,17 +64,14 @@ Create a clean, professional-looking visual representation. Ensure data accuracy
 
 // Exported wrapper function to call the flow
 export async function generateVisuals(input: GenerateVisualsInput): Promise<GenerateVisualsOutput> {
-    console.log("Generating visual for:", input.promptText);
+    console.log("Visualizer Flow: Starting generation for:", input.promptText);
     try {
         const result = await generateVisualsFlow(input);
-        console.log("Visual generation successful.");
+        console.log("Visualizer Flow: Generation successful.");
         return result;
     } catch (error) {
         console.error("Error in generateVisuals flow:", error);
         // Rethrow or return a specific error structure
-        throw new Error(`Failed to generate visual: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(`Failed to generate AI visual: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
-
-// DO NOT export schemas or other non-async function values from this 'use server' file.
-// Only export the main async function and potentially TypeScript types.
